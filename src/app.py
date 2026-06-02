@@ -1,6 +1,11 @@
 import os
 
 from models import User, Review, Favourite
+from utils.validators import (
+    validate_username,
+    validate_password,
+    sanitize
+)
 from flask import Flask, Blueprint, render_template
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
