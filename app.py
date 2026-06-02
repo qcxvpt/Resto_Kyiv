@@ -4,9 +4,6 @@ Application factory entry point.
 """
 
 from src.extensions import db, bcrypt, csrf, limiter
-from src.models.user import User
-from src.models.review import Review
-from src.models.favourite import Favourite
 from src.api.restaurants import restaurants_bp
 from src.api.reviews import reviews_bp
 from src.api.favourites import favourites_bp
