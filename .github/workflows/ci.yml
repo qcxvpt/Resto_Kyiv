@@ -1,0 +1,128 @@
+name: CI / CD — RestoKyiv
+
+on:
+  push:
+    branches: [ "main", "master", "dev", "StaticAnalysis" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+env:
+  REGISTRY:   ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/restokyiv
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # JOB 1: Lint & Static Analysis (flake8 + bandit)
+  # ─────────────────────────────────────────────────────────────────────────────
+  lint:
+    name: Lint & Static Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install lint tools
+        run: |
+          pip install flake8 flake8-bugbear bandit
+
+      - name: Run flake8 (PEP-8 + bug detection)
+        run: |
+          flake8 app.py --max-line-length=120 --extend-ignore=E501 \
+            --statistics --count
+
+      - name: Run bandit (security scan)
+        run: |
+          bandit -r app.py -ll -ii || true   # warn only, don't block build
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # JOB 2: Unit Tests with coverage
+  # ─────────────────────────────────────────────────────────────────────────────
+  test:
+    name: Unit Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    needs: lint
+
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+
+      - name: Run tests with coverage
+        run: |
+          pytest tests/ -v \
+            --cov=app \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            --tb=short
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-py${{ matrix.python-version }}
+          path: coverage.xml
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # JOB 3: Build & push Docker image  (only on push to main/master)
+  # ─────────────────────────────────────────────────────────────────────────────
+  docker:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata (tags & labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to:   type=gha,mode=max

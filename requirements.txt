@@ -1,2 +1,11 @@
+<<<<<<< HEAD
 flask
 pytest
+=======
+Flask==3.1.0
+Flask-SQLAlchemy==3.1.1
+Flask-Bcrypt==1.0.1
+Flask-WTF==1.2.2
+Flask-Limiter==3.12
+gunicorn==23.0.0
+>>>>>>> 7aeee60 (Initial commit)
