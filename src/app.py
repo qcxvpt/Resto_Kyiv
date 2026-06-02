@@ -1,5 +1,6 @@
 import os
 
+from models import User, Review, Favourite
 from flask import Flask, Blueprint, render_template
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
